@@ -2,6 +2,15 @@ import numpy as np
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
+# EirGrid Group Smart Grid Dashboard - live grid data, used under EirGrid Group's Open Data Licence:
+# https://www.smartgriddashboard.com/all/open-data-license/
+# Attribution required by that licence: "Supported by EirGrid Group Data" (displayed in the dashboard footer whenever live data is used).
+# ENDPOINT: undocumented (EirGrid has no published API spec - there's an open request for one on data.gov.ie), but openly licensed, and it backs
+# EirGrid's own public dashboard at smartgriddashboard.com. The exact query pattern below was taken from a currently-referenced, actively maintained open-source downloader (github.com/Daniel-Parke/EirGrid_Data_Download) - not guessed. 
+# A live test request to this endpoint got back a real, structured JSON error payload confirming the service is up and parses query parameters correctly; 
+# the exact field names inside a *successful* "Rows" payload could not be independently confirmed from within this development sandbox due to a tooling 
+#constraint on outbound query strings. Run
+# GridCurtailmentScraper().verify_connection() locally before relying on this - it will tell you immediately if the row schema below needs adjusting.
 
 EIRGRID_BASE_URL = "https://www.smartgriddashboard.com/DashboardService.svc/data"
 class EirGridLiveDataError(Exception):
