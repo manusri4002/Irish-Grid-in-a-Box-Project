@@ -2,12 +2,19 @@ import numpy as np
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
+
 EIRGRID_BASE_URL = "https://www.smartgriddashboard.com/DashboardService.svc/data"
-
-
 class EirGridLiveDataError(Exception):
     """Raised when the live EirGrid feed can't be fetched or parsed as expected."""
     pass
+class GridCurtailmentScraper:
+    """
+    Live data client for EirGrid's Smart Grid Dashboard, with a clearly-
+    labeled simulated fallback if the live feed is ever unavailable
+    (network error, schema change, empty response, etc). The dashboard
+    downstream never has to guess which mode is active - every DataFrame
+    and dict returned includes a "Data Source" / "data_source" field.
+    """
 
     def __init__(self, region: str = "ROI", timeout: int = 15):
         # Target geographical region: "ROI" (Republic of Ireland), "NI" (Northern Ireland), or "ALL"
@@ -25,10 +32,10 @@ class EirGridLiveDataError(Exception):
         co2emission, SnspALL. SnspALL is only published on an all-island
         basis (region=ALL), never split by ROI/NI.
         """
-        
+        # System Non-Synchronous Penetration (SnspALL) is an island-wide metric; override region if needed
         region = "ALL" if category == "SnspALL" else self.region
 
-       
+        # Construct query payload with EirGrid's required string timestamp format (%d-%b-%Y %H:%M)
         params = {
             "area": category,
             "region": region,
@@ -36,6 +43,7 @@ class EirGridLiveDataError(Exception):
             "dateto": date_to.strftime("%d-%b-%Y %H:%M"),
         }
 
+        # Dispatch HTTP GET request to the undocumented service endpoint
         response = requests.get(EIRGRID_BASE_URL, params=params, timeout=self.timeout)
         response.raise_for_status()  # HTTP errors (4xx, 5xx) raise HTTPError exception
         payload = response.json()
@@ -49,11 +57,13 @@ class EirGridLiveDataError(Exception):
 
         rows = payload["Rows"]
 
+        # Defensive key discovery: EirGrid API field names can fluctuate across service updates.
+        # Check candidate keys against the first record in the returned list.
         sample = rows[0]
         time_key = next((k for k in ("EffectiveTime", "Effective_Time", "time", "Time") if k in sample), None)
         value_key = next((k for k in ("Value", "value", "FieldValue") if k in sample), None)
 
-
+        # Abort if neither known timestamp key nor value key exist in the payload
         if time_key is None or value_key is None:
             raise EirGridLiveDataError(
                 f"Unrecognized row schema from EirGrid for area={category}. Expected a "
@@ -61,20 +71,21 @@ class EirGridLiveDataError(Exception):
                 f"Update the key lookup in GridCurtailmentScraper._fetch_series() to match."
             )
 
-  
+        # Convert raw row dictionaries to a pandas DataFrame
         df = pd.DataFrame(rows)
 
+        # Parse string timestamps using EirGrid's second-level datetime format; set invalid dates to NaT
         df["timestamp"] = pd.to_datetime(df[time_key], format="%d-%b-%Y %H:%M:%S", errors="coerce")
-
+        # Convert values to numeric float representation; coerce bad/missing values to NaN
         df["value"] = pd.to_numeric(df[value_key], errors="coerce")
 
-        
+        # Clean dataframe: purge invalid rows, enforce chronological ordering, and reset index
         df = df.dropna(subset=["timestamp", "value"]).sort_values("timestamp").reset_index(drop=True)
 
         if df.empty:
             raise EirGridLiveDataError(f"EirGrid area={category} returned rows, but none parsed cleanly.")
 
-
+        # Return standardized two-column DataFrame for consistency
         return df[["timestamp", "value"]]
 
     def verify_connection(self) -> dict:
@@ -105,7 +116,21 @@ class EirGridLiveDataError(Exception):
             return {"success": False, "error": str(e)}
 
     def fetch_historical_curtailment_logs(self, hours: int = 24) -> pd.DataFrame:
-       
+        """
+        Pulls REAL EirGrid demand, wind, combined interconnection flow, and
+        System Non-Synchronous Penetration (SNSP) for the last `hours`
+        hours. Falls back to a clearly-labeled simulated replay if the live
+        feed is unavailable for any reason - the two are never silently
+        blended.
+
+        IMPORTANT SEMANTIC NOTE: EirGrid's public "windactual" series is
+        the REALIZED, already-curtailed wind output - not a pre-curtailment
+        potential/forecast figure. There is no direct "wind potential"
+        series in this free feed, so downstream curtailment can only be an
+        ESTIMATE inferred from how far real SNSP exceeds an operational
+        threshold, not a directly-published curtailment-MW measurement.
+        Label it as such everywhere it's displayed.
+        """
         now = datetime.now()
         date_from = now - timedelta(hours=hours)
 
@@ -140,7 +165,24 @@ class EirGridLiveDataError(Exception):
 
     def _simulate_historical_logs(self, hours: int = 24) -> pd.DataFrame:
         """
-        
+        Fallback simulated replay - used only when the live EirGrid feed
+        is unavailable. Reseeds per-hour (not a fixed seed) so the replay
+        still varies over time rather than freezing at one outcome.
+        """
+        # Anchor random seed to the current epoch hour so values change smoothly over time
+        rng = np.random.default_rng(int(datetime.now().timestamp() // 3600))
+        timestamps = pd.date_range(end=datetime.now(), periods=hours, freq='h')
+
+        # Model base diurnal demand and wind production using sinusoidal waves
+        base_demand = 4000 + np.sin(np.linspace(0, 4 * np.pi, hours)) * 800
+        base_wind = 1800 + np.cos(np.linspace(0, 4 * np.pi, hours)) * 600
+
+        # Inject realistic Gaussian noise into power demand
+        demand = base_demand + rng.normal(0, 100, hours)
+        # Apply noise and bound wind generation between 200 MW and 4400 MW physical limits
+        wind = np.clip(base_wind + rng.normal(0, 150, hours), 200, 4400)
+        # Uniform random distribution for net interconnector flow (-400 MW import to +150 MW export)
+        interconnection = rng.uniform(-400, 150, hours)
 
         # Compute System Non-Synchronous Penetration (SNSP %) bounded between operational limits [10%, 85%]
         snsp = np.clip(((wind + interconnection) / demand) * 100, 10, 85)
@@ -164,7 +206,36 @@ class EirGridLiveDataError(Exception):
         One-shot 'poll now' live snapshot. Falls back to a clearly-labeled
         simulated snapshot if the live feed is unavailable.
         """
-    
+        last_error = None
+        # Progressive widening strategy (2h -> 4h -> 8h) to accommodate potential reporting latency from EirGrid
+        for window_hours in (2, 4, 8):
+            try:
+                now = datetime.now()
+                # Fetch key live grid series across current window
+                demand_df = self._fetch_series("demandactual", now - timedelta(hours=window_hours), now)
+                wind_df = self._fetch_series("windactual", now - timedelta(hours=window_hours), now)
+                snsp_df = self._fetch_series("SnspALL", now - timedelta(hours=window_hours), now)
+
+                # Extract the most recent data point from each series
+                demand_mw = float(demand_df["value"].iloc[-1])
+                wind_mw = float(wind_df["value"].iloc[-1])
+                snsp_pct = float(snsp_df["value"].iloc[-1])
+
+                # Construct single live status payload
+                return {
+                    "timestamp": str(demand_df["timestamp"].iloc[-1]),
+                    "system_demand_mw": round(demand_mw, 1),
+                    "available_wind_mw": round(wind_mw, 1),
+                    "snsp_percent": round(snsp_pct, 1),
+                    # Evaluate SNSP against the operational threshold (68%) for curtailment alert
+                    "grid_status": "HIGH SNSP - CURTAILMENT RISK" if snsp_pct > 68 else "NORMAL OPERATION",
+                    "data_source": "EirGrid (live)",
+                }
+            except Exception as e:
+                # Store exception and retry with a wider lookback window
+                last_error = e
+                continue
+
         # If all lookback attempts fail, report error and build a simulated point-in-time snapshot
         print(f"[scraper.py] Live EirGrid poll failed after retrying wider windows ({last_error}) - falling back to simulated snapshot.")
         rng = np.random.default_rng(int(datetime.now().timestamp()) % 10000)
