@@ -42,17 +42,13 @@ def run_project_5_forecasting():
     fetcher = EnergyDataFetcher()
 
     # FIX: both models previously trained on Jan-Mar 2025 only (3 months).
-    # Both use `month` as a raw integer feature (1-12) - XGBoost trees can't
-    # extrapolate past the range of values they were split on, so any
-    # inference request for month=4..12 was silently hitting whatever leaf
-    # happened to be nearest, not a genuine seasonal prediction. Verified
-    # concretely on the solar model: an inference for month=7 (July, never
-    # seen in training) produced 150.6 kWh total for a "fairly clear" day,
-    # vs ~810 kWh from the heuristic fallback formula for the same inputs -
-    # a ~5.4x gap consistent with out-of-distribution extrapolation, not a
-    # genuinely different weather prediction. Training on a full calendar
-    # year fixes this for both models, since `month` is now observed across
+    # Both use `month` as a raw integer feature (1-12) - XGBoost trees can't extrapolate past the range of values they were split on, so any
+    # inference request for month=4..12 was silently hitting whatever leaf happened to be nearest, not a genuine seasonal prediction. Verified
+    # concretely on the solar model: an inference for month=7 (July, never seen in training) produced 150.6 kWh total for a "fairly clear" day,
+    # vs ~810 kWh from the heuristic fallback formula for the same inputs - a ~5.4x gap consistent with out-of-distribution extrapolation, not a
+    # genuinely different weather prediction. Training on a full calendar year fixes this for both models, since `month` is now observed across 
     # its entire real range (1-12) during training.
+    
     TRAIN_START = "2025-01-01"
     TRAIN_END = "2026-01-01"
 
