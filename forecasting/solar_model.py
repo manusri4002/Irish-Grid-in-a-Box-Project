@@ -17,13 +17,6 @@ class SolarForecastingModel:
     ambient_temp sliders, there's no live irradiance sensor feed, so a model
     trained on irradiance couldn't be run from the dashboard at all. This
     keeps train-time and inference-time features identical.
-
-    (Replaces the previous wiring bug in microgrid-ems/profiles.py, which
-    called the *wind* model - trained on 8 wind-specific features - with a
-    mismatched 3-feature array. That always raised inside a bare
-    `except Exception: pass`, so the EMS dashboard silently ran the
-    heuristic fallback on every request while claiming "ML-driven"
-    forecasting in its own docstring.)
     """
     FEATURE_COLS = ["hour", "month", "cloud_cover", "temperature"]
 
@@ -56,9 +49,8 @@ class SolarForecastingModel:
         # FIX: previously used shuffle=False (a chronological split), copied
         # from the wind model's reasoning ("avoid data leakage") without
         # checking whether it actually applied here - it doesn't. The wind
-        # model has wind_speed_lag1/lag2 features, where shuffling WOULD
-        # leak future values into training rows relative to a lag term.
-        # This model's FEATURE_COLS has no lag feature at all - every row
+        # model has wind_speed_lag1/lag2 features
+        # This model's FEATURE_COLS lag feature was solved - every row
         # is an independent (hour, month, cloud_cover, temperature) sample
         # with no dependency on neighboring rows, so there's no leakage
         # risk from shuffling.
