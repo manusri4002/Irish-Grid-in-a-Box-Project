@@ -91,3 +91,39 @@ class SolarForecastingModel:
         # Serialize model binary to file system
         joblib.dump(self.model, self.model_path)
         print(f"Model successfully saved to artifact: {self.model_path}\n")
+
+def predict_day(self, cloud_cover: float, ambient_temp: float, month: int = None) -> list:
+        """
+        Predicts a full 24-hour solar generation profile (kW) for a given
+        cloud_cover (%) and ambient_temp (°C). `month` defaults to the
+        current calendar month if not supplied, so the model can pick up on
+        seasonal daylight/zenith-angle effects learned during training.
+        Returns a list of 24 non-negative floats (Hour 0 -> Hour 23).
+        """
+        # Guard check: Ensure trained model file exists before executing inference
+        if not os.path.exists(self.model_path):
+            raise FileNotFoundError(
+                "Trained solar model artifact not found. Run the forecasting "
+                "training pipeline (main.py) before requesting predictions."
+            )
+
+        # Fall back to current calendar month if month parameter is unspecified
+        if month is None:
+            month = pd.Timestamp.now().month
+
+        # Load persisted model weights from disk
+        loaded_model = joblib.load(self.model_path)
+        
+        # Build 24-row DataFrame spanning a full diurnal cycle (Hours 0 through 23)
+        features = pd.DataFrame({
+            "hour": list(range(24)),
+            "month": [month] * 24,
+            "cloud_cover": [cloud_cover] * 24,
+            "temperature": [ambient_temp] * 24,
+        })[self.FEATURE_COLS] # Re-index columns to ensure exact feature order match
+
+        # Run vectorized batch inference for all 24 hours
+        predictions = loaded_model.predict(features)
+        
+        # Apply physical lower-bound clamp max(0.0, p) to eliminate negative generation estimates during nighttime hours
+        return [max(0.0, float(p)) for p in predictions]
