@@ -4,25 +4,16 @@ import requests
 from datetime import datetime, timedelta
 
 # EirGrid Group Smart Grid Dashboard - live grid data, used under EirGrid
-# Group's Open Data Licence:
-# https://www.smartgriddashboard.com/all/open-data-license/
-# Attribution required by that licence: "Supported by EirGrid Group Data"
-# (displayed in the dashboard footer whenever live data is used).
-#
+# Group's Open Data Licence: https://www.smartgriddashboard.com/all/open-data-license/
+# Attribution required by that licence: "Supported by EirGrid Group Data" (displayed in the dashboard footer whenever live data is used).
+
 # ENDPOINT: undocumented (EirGrid has no published API spec - there's an
-# open request for one on data.gov.ie), but openly licensed, and it backs
-# EirGrid's own public dashboard at smartgriddashboard.com. The exact
-# query pattern below was taken from a currently-referenced, actively
-# maintained open-source downloader
-# (github.com/Daniel-Parke/EirGrid_Data_Download) - not guessed. A live
-# test request to this endpoint got back a real, structured JSON error
-# payload confirming the service is up and parses query parameters
-# correctly; the exact field names inside a *successful* "Rows" payload
-# could not be independently confirmed from within this development
-# sandbox due to a tooling constraint on outbound query strings. Run
-# GridCurtailmentScraper().verify_connection() locally before relying on
-# this - it will tell you immediately if the row schema below needs
-# adjusting.
+# open request for one on data.gov.ie), but openly licensed, and it backs EirGrid's own public dashboard at smartgriddashboard.com. The exact
+# query pattern below was taken from a currently-referenced, actively maintained open-source downloader
+# (github.com/Daniel-Parke/EirGrid_Data_Download) - not guessed. A live test request to this endpoint got back a real, structured JSON error
+# payload confirming the service is up and parses query parameters correctly; the exact field names inside a *successful* "Rows" payload
+# could not be independently confirmed from within this development sandbox due to a tooling constraint on outbound query strings. Run
+# GridCurtailmentScraper().verify_connection() locally before relying on this - it will tell you immediately if the row schema below needs adjusting.
 EIRGRID_BASE_URL = "https://www.smartgriddashboard.com/DashboardService.svc/data"
 
 
@@ -41,7 +32,9 @@ class GridCurtailmentScraper:
     """
 
     def __init__(self, region: str = "ROI", timeout: int = 15):
-        self.region = region  # "ROI", "NI", or "ALL"
+        # ROI = Republic of Ireland, NI = Northern Ireland, ALL = All-Island grid
+        self.region = region  
+        # Timeout duration in seconds for outbound HTTP requests
         self.timeout = timeout
 
     def _fetch_series(self, category: str, date_from: datetime, date_to: datetime) -> pd.DataFrame:
@@ -54,17 +47,23 @@ class GridCurtailmentScraper:
         co2emission, SnspALL. SnspALL is only published on an all-island
         basis (region=ALL), never split by ROI/NI.
         """
+        # Force region='ALL' for System Non-Synchronous Penetration (SnspALL) as regional splits don't exist
         region = "ALL" if category == "SnspALL" else self.region
+
+        # Format parameters required by the EirGrid WCF Dashboard Service
         params = {
             "area": category,
             "region": region,
             "datefrom": date_from.strftime("%d-%b-%Y %H:%M"),
             "dateto": date_to.strftime("%d-%b-%Y %H:%M"),
         }
+
+        # Issue network request and handle HTTP status codes
         response = requests.get(EIRGRID_BASE_URL, params=params, timeout=self.timeout)
         response.raise_for_status()
         payload = response.json()
 
+        # Check for API-level error flags or missing data rows in the payload
         if payload.get("Status") == "Error" or not payload.get("Rows"):
             raise EirGridLiveDataError(
                 f"EirGrid returned no usable data for area={category}, region={region}: "
@@ -72,13 +71,13 @@ class GridCurtailmentScraper:
             )
 
         rows = payload["Rows"]
-        # Defensive parsing: EirGrid's row schema isn't formally documented
-        # anywhere. Try the field names known from community tooling; fail
-        # LOUDLY with the actual keys seen if none match, rather than
-        # silently returning garbage or crashing somewhere unrelated.
+
+        # Defensive parsing: Dynamically detect timestamp and value column names from first record
+        # to remain resilient against minor variations in undocumented field naming
         sample = rows[0]
         time_key = next((k for k in ("EffectiveTime", "Effective_Time", "time", "Time") if k in sample), None)
         value_key = next((k for k in ("Value", "value", "FieldValue") if k in sample), None)
+
         if time_key is None or value_key is None:
             raise EirGridLiveDataError(
                 f"Unrecognized row schema from EirGrid for area={category}. Expected a "
@@ -86,12 +85,17 @@ class GridCurtailmentScraper:
                 f"Update the key lookup in GridCurtailmentScraper._fetch_series() to match."
             )
 
+        # Build DataFrame and convert data types cleanly
         df = pd.DataFrame(rows)
         df["timestamp"] = pd.to_datetime(df[time_key], format="%d-%b-%Y %H:%M:%S", errors="coerce")
         df["value"] = pd.to_numeric(df[value_key], errors="coerce")
+
+        # Drop unparseable records, sort sequentially, and reset index
         df = df.dropna(subset=["timestamp", "value"]).sort_values("timestamp").reset_index(drop=True)
+
         if df.empty:
             raise EirGridLiveDataError(f"EirGrid area={category} returned rows, but none parsed cleanly.")
+
         return df[["timestamp", "value"]]
 
     def verify_connection(self) -> dict:
@@ -107,6 +111,7 @@ class GridCurtailmentScraper:
         """
         try:
             now = datetime.now()
+            # Fetch a 2-hour window of system demand as a smoke test
             df = self._fetch_series("demandactual", now - timedelta(hours=2), now)
             return {
                 "success": True,
@@ -137,26 +142,31 @@ class GridCurtailmentScraper:
         date_from = now - timedelta(hours=hours)
 
         try:
+            # Query all required data series individually from EirGrid
             demand_df = self._fetch_series("demandactual", date_from, now)
             wind_df = self._fetch_series("windactual", date_from, now)
             interconnection_df = self._fetch_series("interconnection", date_from, now)
             snsp_df = self._fetch_series("SnspALL", date_from, now)
             co2_df = self._fetch_series("co2intensity", date_from, now)
 
+            # Sequentially inner-join all series on their matching timestamps
             merged = demand_df.rename(columns={"value": "System Demand (MW)"})
             merged = merged.merge(wind_df.rename(columns={"value": "Wind Actual (MW)"}), on="timestamp", how="inner")
             merged = merged.merge(interconnection_df.rename(columns={"value": "Net Interconnection (MW)"}), on="timestamp", how="inner")
             merged = merged.merge(snsp_df.rename(columns={"value": "SNSP (%)"}), on="timestamp", how="inner")
             merged = merged.merge(co2_df.rename(columns={"value": "CO2 Intensity (g/kWh)"}), on="timestamp", how="inner")
 
+            # Verify that merging produced common timestamps
             if merged.empty:
                 raise EirGridLiveDataError("No overlapping timestamps across EirGrid series after merge.")
 
+            # Standardize column naming and annotate data provenance
             merged = merged.rename(columns={"timestamp": "Timestamp"})
             merged["Data Source"] = "EirGrid (live)"
             return merged
 
         except Exception as e:
+            # Log fetch failure and seamlessly fall back to synthetic data generation
             print(f"[scraper.py] Live EirGrid fetch failed ({e}) - falling back to simulated data.")
             return self._simulate_historical_logs(hours)
 
@@ -166,18 +176,26 @@ class GridCurtailmentScraper:
         is unavailable. Reseeds per-hour (not a fixed seed) so the replay
         still varies over time rather than freezing at one outcome.
         """
+        # Seed generator using current hour timestamp so values vary hourly while remaining stable within the hour
         rng = np.random.default_rng(int(datetime.now().timestamp() // 3600))
         timestamps = pd.date_range(end=datetime.now(), periods=hours, freq='h')
 
+        # Model diurnal wave patterns for demand and wind output using sine/cosine curves
         base_demand = 4000 + np.sin(np.linspace(0, 4 * np.pi, hours)) * 800
         base_wind = 1800 + np.cos(np.linspace(0, 4 * np.pi, hours)) * 600
 
+        # Add Gaussian noise and enforce physically realistic upper/lower boundaries
         demand = base_demand + rng.normal(0, 100, hours)
         wind = np.clip(base_wind + rng.normal(0, 150, hours), 200, 4400)
-        interconnection = rng.uniform(-400, 150, hours)
+        interconnection = rng.uniform(-400, 150, hours)  # Negative = export, Positive = import
+
+        # Estimate SNSP percentage: (Non-Synchronous Gen + Imports) / Demand
         snsp = np.clip(((wind + interconnection) / demand) * 100, 10, 85)
+
+        # Estimate CO2 intensity (g/kWh): drops dynamically as wind generation increases relative to demand
         co2_intensity = np.clip(380 - (wind / demand) * 320 + rng.uniform(-8, 8, hours), 30, 450)
 
+        # Return synthesized dataset structured identically to live feed data
         return pd.DataFrame({
             "Timestamp": timestamps,
             "System Demand (MW)": np.round(demand, 1),
@@ -193,15 +211,7 @@ class GridCurtailmentScraper:
         One-shot 'poll now' live snapshot. Falls back to a clearly-labeled
         simulated snapshot if the live feed is unavailable.
         """
-        # FIX: previously used a single fixed 2-hour window. Observed in
-        # practice: the main 24-hour feed reported "EirGrid (live)" while
-        # this same-session poll fell back to simulated - most likely
-        # because EirGrid's most recent ~30-60 minutes of data isn't
-        # published yet at query time, so a narrow 2-hour window can
-        # legitimately come back empty even though the service is fine.
-        # Retry with progressively wider windows before giving up and
-        # falling back to simulated, rather than failing on the first,
-        # narrowest attempt.
+        # Retry with progressively wider lookback windows (2h, 4h, 8h) to account for EirGrid publishing delays
         last_error = None
         for window_hours in (2, 4, 8):
             try:
@@ -210,6 +220,7 @@ class GridCurtailmentScraper:
                 wind_df = self._fetch_series("windactual", now - timedelta(hours=window_hours), now)
                 snsp_df = self._fetch_series("SnspALL", now - timedelta(hours=window_hours), now)
 
+                # Extract the most recent valid values from each series
                 demand_mw = float(demand_df["value"].iloc[-1])
                 wind_mw = float(wind_df["value"].iloc[-1])
                 snsp_pct = float(snsp_df["value"].iloc[-1])
@@ -219,18 +230,21 @@ class GridCurtailmentScraper:
                     "system_demand_mw": round(demand_mw, 1),
                     "available_wind_mw": round(wind_mw, 1),
                     "snsp_percent": round(snsp_pct, 1),
+                    # Evaluate operational risk based on SNSP operational limit (~68-75%)
                     "grid_status": "HIGH SNSP - CURTAILMENT RISK" if snsp_pct > 68 else "NORMAL OPERATION",
                     "data_source": "EirGrid (live)",
                 }
             except Exception as e:
                 last_error = e
-                continue
+                continue  # Retry with wider window
 
+        # All retry attempts failed; log warning and generate synthetic fallback snapshot
         print(f"[scraper.py] Live EirGrid poll failed after retrying wider windows ({last_error}) - falling back to simulated snapshot.")
         rng = np.random.default_rng(int(datetime.now().timestamp()) % 10000)
         system_demand_mw = round(rng.uniform(3500, 5500), 1)
         wind_avail_mw = round(rng.uniform(1200, 2800), 1)
         snsp_pct = round(rng.uniform(20, 80), 1)
+
         return {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "system_demand_mw": system_demand_mw,
@@ -239,4 +253,3 @@ class GridCurtailmentScraper:
             "grid_status": "HIGH SNSP - CURTAILMENT RISK" if snsp_pct > 68 else "NORMAL OPERATION",
             "data_source": "Simulated (live feed unavailable)",
         }
-    
