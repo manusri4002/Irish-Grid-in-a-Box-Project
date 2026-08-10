@@ -14,8 +14,7 @@ class SolarForecastingModel:
 
     Design Rationale:
     -----------------
-    Deliberately omits `shortwave_radiation` as an input feature. Although solar 
-    irradiance is used during synthetic data labeling, the live dashboard UI only 
+    Although solar irradiance is used during synthetic data labeling, the live dashboard UI only 
     exposes `cloud_cover` (%) and `ambient_temp` (°C) controls without a live 
     radiometer feed. Keeping features aligned guarantees consistency between 
     training and live production inference.
