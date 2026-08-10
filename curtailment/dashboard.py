@@ -209,7 +209,7 @@ tf.markdown('<div class="header-subtitle">Continuous tracking of dispatch-down e
 
 # Determine badge styling based on active API connection state (Live vs. Simulated)
 badge_color = ACCENT_GREEN if IS_LIVE else ACCENT_ORANGE
-badge_text = "🟢 LIVE: EirGrid Smart Grid Dashboard" if IS_LIVE else "🟠 SIMULATED (live feed unavailable this session)"
+badge_text = "LIVE: EirGrid Smart Grid Dashboard" if IS_LIVE else "SIMULATED (live feed unavailable this session)"
 tf.markdown(
     f'<span class="live-badge" style="background-color:{badge_color}22; color:{badge_color}; border:1px solid {badge_color};">{badge_text}</span>',
     unsafe_allow_html=True
