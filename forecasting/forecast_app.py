@@ -1,56 +1,77 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import os
 import joblib
 import numpy as np
 
+# Initialize the FastAPI application instance with metadata for interactive OpenAPI documentation (/docs)
 app = FastAPI(
     title="Irish Grid Renewable Forecasting Service",
     description="Production API endpoints for projecting next-hour wind generation assets.",
     version="1.0.0"
 )
 
-# Define the structure of incoming weather payloads using Pydantic for automated validation
-class WeatherTelemetry(BaseModel):
-    wind_speed: float        # m/s
-    temperature: float       # Celsius
-    hour: int                # 0-23
-    month: int               # 1-12
-    wind_dir_sin: float      # Sine component of direction
-    wind_dir_cos: float      # Cosine component of direction
-    wind_speed_lag1: float   # Wind speed 1 hr ago (m/s)
-    wind_speed_lag2: float   # Wind speed 2 hrs ago (m/s)
 
-# Path to our trained XGBoost binary
+# Data Schema & Request Validation
+# Define the expected JSON payload schema using Pydantic.
+# Pydantic handles type coercion, validation, and auto-generates schema docs.
+class WeatherTelemetry(BaseModel):
+    wind_speed: float        # Current wind speed in meters per second (m/s)
+    temperature: float       # Ambient temperature in degrees Celsius (°C)
+    hour: int                # Hour of the day (0 to 23) for diurnal cycle modeling
+    month: int               # Month of the year (1 to 12) for seasonal trend modeling
+    wind_dir_sin: float      # Sine component of wind direction angle (trigonometric encoding)
+    wind_dir_cos: float      # Cosine component of wind direction angle (trigonometric encoding)
+    wind_speed_lag1: float   # Historical wind speed recorded 1 hour prior (m/s)
+    wind_speed_lag2: float   # Historical wind speed recorded 2 hours prior (m/s)
+
+
+# Configuration & Constants
+# Construct an absolute file path to the trained model artifact relative to this file's location
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "wind_model.joblib")
 
+# Service Endpoints
 @app.get("/")
 def read_root():
-    """Health check endpoint to verify microservice status."""
+    """
+    Health check endpoint.
+    
+    Verifies that the microservice is running and checks whether the required 
+    machine learning model binary is present on the filesystem.
+    """
+    # Check physical presence of the serialized model file
     model_status = "Ready" if os.path.exists(MODEL_PATH) else "Model Missing (Needs Training)"
+    
     return {
         "status": "Online",
         "service": "Wind Forecasting Engine",
         "model_artifact_status": model_status
     }
 
+
 @app.post("/predict", response_model=dict)
 def predict_generation(telemetry: WeatherTelemetry):
     """
-    Accepts real-time localized weather telemetry and outputs the forecasted asset output in MW.
+    Inference endpoint.
+    
+    Accepts real-time localized weather telemetry and outputs the predicted 
+    power output for a 50 MW wind farm asset in Megawatts (MW).
     """
-    # 1. Ensure the model artifact binary exists on the server disk
+    # Step 1: Guard clause — verify model binary exists before proceeding
     if not os.path.exists(MODEL_PATH):
         raise HTTPException(
-            status_code=503, 
+            status_code=503,  # Service Unavailable
             detail="Forecasting model binary not found on server. Run training suite first."
         )
     
     try:
-        # 2. Load the trained model into memory
+        # Step 2: Load the serialized model into memory
+        # Note: For high-throughput production, consider loading the model once at server 
+        # startup (e.g., via FastAPI lifespan events) to avoid disk read overhead per request.
         model = joblib.load(MODEL_PATH)
         
-        # 3. Format incoming json fields into a structured 2D array for shape compliance
+        # Step 3: Extract payload attributes into a 2D NumPy array (shape: 1 row x 8 features).
+        # MUST maintain the exact feature order expected by the trained estimator.
         features = np.array([[
             telemetry.wind_speed,
             telemetry.temperature,
@@ -62,12 +83,13 @@ def predict_generation(telemetry: WeatherTelemetry):
             telemetry.wind_speed_lag2
         ]])
         
-        # 4. Generate inference prediction
+        # Step 4: Pass the formatted input matrix to the model for inference
         raw_prediction = model.predict(features)
         
-        # Ensure our mathematical model doesn't return impossible negative clipping outputs
+        # Step 5: Post-processing — enforce physical constraints (e.g., generation cannot be negative)
         predicted_mw = max(0.0, float(raw_prediction[0]))
         
+        # Step 6: Return formatted JSON response with key telemetry indicators
         return {
             "forecasted_generation_mw": round(predicted_mw, 3),
             "unit": "Megawatt (MW)",
@@ -75,5 +97,8 @@ def predict_generation(telemetry: WeatherTelemetry):
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Inference Engine failure: {str(e)}")
-    
+        # Catch unexpected runtime or deserialization errors and return an HTTP 500 error
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Inference Engine failure: {str(e)}"
+        )
