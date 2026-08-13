@@ -289,7 +289,7 @@ Recommended inputs:
 | Line resistance / reactance | slider (pu) | `0.15`, `0.15` |
 | Solar forecast source | auto-filled | via `load_ml_solar_forecast()` |
 
-> Reactive power for the voltage constraint is currently estimated from active power at an assumed 0.95 power factor, since the model has no live Q telemetry — see [Mathematical Formulation](#mathematical-formulation).
+> Reactive power for the voltage constraint is currently estimated from active power at an assumed 0.95 power factor, since the model has no live Q telemetry —> see [Mathematical Formulation](#mathematical-formulation).
 
 Output: an hourly dispatch chart (solar/grid/battery), net savings vs. an unmanaged baseline, and Newton-Raphson-validated PCC voltage with a convergence/security status gate. For Stochastic MPC, an additional column shows which weather scenario was realized each hour.
 
