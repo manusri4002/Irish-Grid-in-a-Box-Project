@@ -65,23 +65,15 @@ class EnergyDataFetcher:
         panel_capacity_kw: float = 120.0
     ) -> pd.DataFrame:
         """
-        Fetches hourly historical cloud cover, shortwave (global horizontal)
-        irradiance, and temperature from Open-Meteo, and derives a simulated
-        PV generation label from measured irradiance.
+        Fetches hourly cloud cover, shortwave irradiance, and temperature
+        from Open-Meteo, and derives a PV generation label from irradiance.
 
-        Note on why cloud_cover is fetched but shortwave_radiation is used
-        for the label instead of cloud_cover directly: the EMS dashboard's
-        sidebar only exposes cloud_cover and ambient_temp sliders, so
-        SolarForecastingModel is trained to predict from those two inputs
-        plus hour/month. Using measured irradiance (which reflects the
-        real historical relationship between cloud cover, sun angle, and
-        actual solar energy reaching the panel) to build the label - rather
-        than deriving the label from cloud_cover with a hand-written
-        formula - gives the model a genuine, non-circular target to learn:
-        the actual historical mapping from (cloud_cover, temperature, hour,
-        month) to real irradiance-driven output, which a simple linear
-        formula can't capture (non-linear cloud attenuation, solar zenith
-        angle by hour/month, etc).
+        The label is built from measured irradiance rather than a formula
+        over cloud_cover directly, so training reflects the real historical
+        relationship between cloud cover, sun angle, and output - something
+        a hand-written linear formula can't capture. At inference time the
+        EMS sidebar only exposes cloud_cover and ambient_temp, so the model
+        is trained on those two features plus hour/month.
         """
         print(f"Fetching solar telemetry from Open-Meteo for Lat: {self.lat}, Lon: {self.lon}...")
 
