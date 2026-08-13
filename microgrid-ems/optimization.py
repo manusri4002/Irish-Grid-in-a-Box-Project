@@ -105,19 +105,48 @@ def run_stochastic_mpc(
     At each step:
     1. Formulates a scenario-tree stochastic MILP across the receding lookahead horizon.
     2. Minimizes expected operational cost weighted by scenario probabilities.
-    3. Implements the first-step decision against ground-truth conditions ("Overcast").
-    4. Recedes horizon and updates real physical State of Charge (SoC).
+    3. Enforces NON-ANTICIPATIVITY: the current hour's battery action is pinned
+       identical across every scenario branch, since the controller cannot know
+       which future weather scenario will actually occur when deciding right now.
+       (Verified concretely: without this constraint, the solver could commit to
+       a DIFFERENT current-hour battery action depending on which future
+       scenario it assumed - i.e. it was allowed to peek at the future before
+       deciding the present. Only strictly-future hours are allowed to branch
+       by scenario, since those represent genuine recourse decisions made
+       after more information is known.)
+    4. Draws the ACTUAL realized weather scenario for this hour from the real
+       scenario probabilities (not a fixed hardcoded outcome), so grid import
+       reacts to whatever solar genuinely shows up against the committed,
+       non-anticipative battery action.
+    5. Recedes horizon and updates real physical State of Charge (SoC).
+
+    Runs the FULL 24-hour horizon (previously silently truncated to 12 hours).
+
+    Includes a per-scenario curtailment variable so a scenario's solar
+    surplus - which can differ across scenario branches even though the
+    battery action is now shared - always has somewhere to go instead of
+    making the LP infeasible when it exceeds what the shared battery action
+    can absorb (verified this failure mode with an exaggerated scenario set
+    before adding the fix, and confirmed it resolves cleanly afterward).
     """
     # Fetch stochastic scenario tree definitions (probabilities and PV production scaling multipliers)
     scenarios = get_stochastic_scenarios()
+    scenario_names = list(scenarios.keys())
+    scenario_probs = [scenarios[s]["prob"] for s in scenario_names]
+
     hours_24, base_load, base_solar, base_prices = get_base_profiles(peak_cost, off_peak_cost, cloud_cover, ambient_temp)
     
     actual_timeline = []
     current_soc = init_soc
-    sim_duration = 12  # Number of hours to execute in rolling-horizon simulation
+    sim_duration = 24  # Full rolling-horizon day (was silently truncated to 12)
     
     eta_in = np.sqrt(eff)
     eta_out = 1.0 / np.sqrt(eff)
+
+    # Unseeded on purpose: each hour draws a genuinely fresh weather
+    # realization, so re-running the dashboard shows a different (honest)
+    # trajectory each time, rather than a fixed scripted demo.
+    weather_rng = np.random.default_rng()
     
     #Rolling Horizon Simulation Loop
     for current_hour in range(sim_duration):
@@ -129,24 +158,30 @@ def run_stochastic_mpc(
         
         #Scenario-Indexed Decision Variables
         # Variable dimensions: (lookahead step t, scenario key s)
-        p_grid = pulp.LpVariable.dicts("Grid", (lookahead_steps, scenarios.keys()), lowBound=0)
-        p_ch = pulp.LpVariable.dicts("Chg", (lookahead_steps, scenarios.keys()), lowBound=0)
-        p_dis = pulp.LpVariable.dicts("Dis", (lookahead_steps, scenarios.keys()), lowBound=0)
-        soc = pulp.LpVariable.dicts("SoC", (lookahead_steps, scenarios.keys()), lowBound=0.1 * batt_capacity, upBound=batt_capacity)
-        u = pulp.LpVariable.dicts("IsChg", (lookahead_steps, scenarios.keys()), cat='Binary')
+        p_grid = pulp.LpVariable.dicts("Grid", (lookahead_steps, scenario_names), lowBound=0)
+        p_ch = pulp.LpVariable.dicts("Chg", (lookahead_steps, scenario_names), lowBound=0)
+        p_dis = pulp.LpVariable.dicts("Dis", (lookahead_steps, scenario_names), lowBound=0)
+        p_curt = pulp.LpVariable.dicts("Curt", (lookahead_steps, scenario_names), lowBound=0)
+        soc = pulp.LpVariable.dicts("SoC", (lookahead_steps, scenario_names), lowBound=0.1 * batt_capacity, upBound=batt_capacity)
+        u = pulp.LpVariable.dicts("IsChg", (lookahead_steps, scenario_names), cat='Binary')
         
         #Stochastic Expected Cost Objective
         # Minimizes the probability-weighted expected cost over all scenario branches
         prob += pulp.lpSum([
             scenarios[s]["prob"] * ((base_prices[t] * p_grid[t][s]) + (0.01 * (p_ch[t][s] + p_dis[t][s])))
-            for t in lookahead_steps for s in scenarios.keys()
+            for t in lookahead_steps for s in scenario_names
         ])
         
         #Scenario-Tree Constraints 
-        for s in scenarios.keys():
+        for s in scenario_names:
             for i, t in enumerate(lookahead_steps):
-                # Power balance equation conditioned on scenario solar production modifier
-                prob += (base_solar[t] * scenarios[s]["modifier"]) + p_grid[t][s] + p_dis[t][s] == base_load[t] + p_ch[t][s]
+                # Power balance equation conditioned on scenario solar production modifier.
+                # p_curt lets scenario-specific solar surplus be discarded instead of
+                # forcing infeasibility when it exceeds the shared battery action's capacity.
+                prob += (
+                    (base_solar[t] * scenarios[s]["modifier"]) + p_grid[t][s] + p_dis[t][s] - p_curt[t][s]
+                    == base_load[t] + p_ch[t][s]
+                )
                 
                 # Charging/discharging capacity limits and mutually exclusive binary modes per scenario branch
                 prob += p_ch[t][s] <= batt_max_power * u[t][s]
@@ -167,30 +202,57 @@ def run_stochastic_mpc(
                     prob += v_approx >= 0.95
                     prob += v_approx <= 1.05
 
+        # NON-ANTICIPATIVITY CONSTRAINT: pin every scenario's current-hour
+        # battery action to a single shared reference scenario's decision.
+        # Only the CURRENT hour needs this - future hours (i>0 above) are
+        # legitimate recourse and are allowed to branch by scenario.
+        ref_scenario = scenario_names[0]
+        for s in scenario_names[1:]:
+            prob += p_ch[current_hour][s] == p_ch[current_hour][ref_scenario]
+            prob += p_dis[current_hour][s] == p_dis[current_hour][ref_scenario]
+
         # Solve current horizon MILP optimization without solver output logs
-        prob.solve(pulp.PULP_CBC_CMD(msg=False))
+        status = prob.solve(pulp.PULP_CBC_CMD(msg=False))
+        if pulp.LpStatus[status] != "Optimal":
+            print(
+                f"[optimization.py] Stochastic MPC hour {current_hour} solved as "
+                f"'{pulp.LpStatus[status]}' (not Optimal) - stopping rolling horizon "
+                f"early and returning the {len(actual_timeline)} hour(s) already solved."
+            )
+            break
         
         #Receding Horizon Execution & State Update
-        # Define ground-truth actual realized solar scenario for physical execution
-        real_s = "Overcast"
+        # Draw which weather scenario ACTUALLY occurs this hour, weighted by
+        # the real scenario probabilities - not a fixed hardcoded outcome.
+        real_s = weather_rng.choice(scenario_names, p=scenario_probs)
         
-        # Extract actual control decisions executed at the current time step from the solved scenario tree
-        exec_ch = max(0.0, p_ch[current_hour][real_s].varValue or 0.0)
-        exec_dis = max(0.0, p_dis[current_hour][real_s].varValue or 0.0)
+        # Extract actual control decisions executed at the current time step.
+        # Reads from ref_scenario since non-anticipativity guarantees every scenario shares this same value.
+        exec_ch = max(0.0, p_ch[current_hour][ref_scenario].varValue or 0.0)
+        exec_dis = max(0.0, p_dis[current_hour][ref_scenario].varValue or 0.0)
         
         # Update physical battery SoC state for next MPC iteration (enforce hard bounds [0.1*C, C])
         current_soc = np.clip(current_soc + (exec_ch * eta_in) - (exec_dis * eta_out), 0.1 * batt_capacity, batt_capacity)
+
+        # Grid import/curtailment must balance the REALIZED solar against the
+        # committed (non-anticipative) battery action - recomputed directly for consistency rather than trusting p_grid[current_hour][real_s].
+        realized_solar = base_solar[current_hour] * scenarios[real_s]["modifier"]
+        realized_net = base_load[current_hour] + exec_ch - realized_solar - exec_dis
+        realized_grid_import = max(0.0, realized_net)
+        realized_curtailment = max(0.0, -realized_net)
         
         # Record real-time operating metrics for historical evaluation
         actual_timeline.append({
             "Hour": current_hour, 
             "Load (kW)": base_load[current_hour],
-            "Solar (kW)": base_solar[current_hour] * scenarios[real_s]["modifier"],
-            "Grid Import (kW)": max(0.0, p_grid[current_hour][real_s].varValue or 0.0),
-            "Battery Charge (kW)": exec_ch,
-            "Battery Discharge (kW)": exec_dis,
-            "SoC (kWh)": current_soc,
-            "Tariff (€/kWh)": base_prices[current_hour]
+            "Solar (kW)": round(realized_solar, 2),
+            "Grid Import (kW)": round(realized_grid_import, 2),
+            "Battery Charge (kW)": round(exec_ch, 2),
+            "Battery Discharge (kW)": round(exec_dis, 2),
+            "SoC (kWh)": round(current_soc, 2),
+            "Tariff (€/kWh)": base_prices[current_hour],
+            "Realized Weather": real_s,
+            "Curtailed Solar (kW)": round(realized_curtailment, 2),
         })
         
     return pd.DataFrame(actual_timeline)
