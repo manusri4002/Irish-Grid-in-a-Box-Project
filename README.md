@@ -23,7 +23,6 @@ It combines four previously separate projects:
 - [Outputs](#outputs)
 - [Tech Stack](#tech-stack)
 - [Roadmap](#roadmap)
-- [Contributing](#contributing)
 - [License](#license)
 
 ---
