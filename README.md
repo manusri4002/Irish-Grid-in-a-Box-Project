@@ -19,7 +19,7 @@ It combines four previously separate projects:
 - [Mathematical Formulation](#mathematical-formulation)
 - [Getting Started](#getting-started)
 - [Running the Project](#running-the-project)
-- [Inputs — What Each Module Expects](#inputs--what-each-module-expects)
+- [Inputs What Each Module Expects](#inputs--what-each-module-expects)
 - [Outputs](#outputs)
 - [Tech Stack](#tech-stack)
 - [Roadmap](#roadmap)
