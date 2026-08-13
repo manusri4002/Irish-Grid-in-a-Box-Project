@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime, timedelta
 
 # Import Streamlit using 'tf' alias as structured in the application
-import streamlit as tf
+import streamlit as st
 import plotly.graph_objects as go
 
 # Ensure the directory containing this file is in the Python search path 
@@ -39,7 +39,7 @@ ACCENT_PURPLE = "#AF7AC5"   # Auxiliary indicators
 ACCENT_RED = "#FF4B4B"      # Curtailment alerts / threshold breaches
 
 # Inject custom CSS to override default Streamlit widget styling and apply dark theme branding
-tf.markdown(f"""
+st.markdown(f"""
     <style>
         /* Base app background and primary text styling */
         .stApp {{
@@ -123,7 +123,7 @@ scraper = GridCurtailmentScraper()
 
 # 2. DATA PIPELINE - REAL EirGrid SMART GRID DASHBOARD FEED & SIMULATED FALLBACK
 # Cache the dataset for 60 seconds to prevent unnecessary API hammering on user rerun
-@tf.cache_data(ttl=60)
+@st.cache_data(ttl=60)
 def generate_grid_data():
     """
     Fetches the last 24 hours of grid operational data from EirGrid scraper.
@@ -204,8 +204,8 @@ SNSP_CAP_PCT = 75  # EirGrid operational limit ceiling for non-synchronous penet
 IS_LIVE = "live" in df_grid["data_source"].iloc[0].lower()
 
 # 3. APPLICATION HEADER SECTION & LIVE STATUS BADGES
-tf.markdown('<div class="header-title">EirGrid System Curtailment Analysis Platform</div>', unsafe_allow_html=True)
-tf.markdown('<div class="header-subtitle">Continuous tracking of dispatch-down energy limits, commercial opportunities, and structural grid bottlenecks.</div>', unsafe_allow_html=True)
+st.markdown('<div class="header-title">EirGrid System Curtailment Analysis Platform</div>', unsafe_allow_html=True)
+st.markdown('<div class="header-subtitle">Continuous tracking of dispatch-down energy limits, commercial opportunities, and structural grid bottlenecks.</div>', unsafe_allow_html=True)
 
 # Determine badge styling based on active API connection state (Live vs. Simulated)
 badge_color = ACCENT_GREEN if IS_LIVE else ACCENT_ORANGE
@@ -217,7 +217,7 @@ tf.markdown(
 
 # Display fallback guidance warning if live EirGrid endpoint was unreachable
 if not IS_LIVE:
-    tf.caption(
+    st.caption(
         "The live EirGrid connection could not be reached this session (network issue, endpoint change, "
         "or schema mismatch - check terminal logs for the specific error). Showing a clearly-labeled "
         "simulated replay instead. Run `python -c \"from scraper import GridCurtailmentScraper as G; "
@@ -225,26 +225,26 @@ if not IS_LIVE:
     )
 
 # 3i. ON-DEMAND LIVE POLL CONTROL
-with tf.expander("🔄 Poll Live Grid Status (independent live snapshot)"):
-    tf.caption(
+with st.expander("🔄 Poll Live Grid Status (independent live snapshot)"):
+    st.caption(
         "Calls the EirGrid live endpoint directly, on demand. Independent of the 24-hour trend below, "
         "so timestamps/values won't necessarily match the rightmost point on that chart exactly."
     )
-    if tf.button("Poll Now"):
+    if st.button("Poll Now"):
         live = scraper.scrape_live_grid_status()
         lc1, lc2, lc3 = tf.columns(3)
         with lc1:
-            tf.metric("System Demand", f"{live['system_demand_mw']} MW")
-            tf.metric("Wind Actual", f"{live['available_wind_mw']} MW")
+            st.metric("System Demand", f"{live['system_demand_mw']} MW")
+            st.metric("Wind Actual", f"{live['available_wind_mw']} MW")
         with lc2:
-            tf.metric("SNSP", f"{live['snsp_percent']}%")
-            tf.metric("Grid Status", live['grid_status'])
+            st.metric("SNSP", f"{live['snsp_percent']}%")
+            st.metric("Grid Status", live['grid_status'])
         with lc3:
-            tf.caption(f"Data source: {live['data_source']}")
-            tf.caption(f"Polled at: {live['timestamp']}")
+            st.caption(f"Data source: {live['data_source']}")
+            st.caption(f"Polled at: {live['timestamp']}")
 
 # 4. HERO SECTION — CURTAILMENT OVERVIEW & LOST METRICS
-tf.markdown('<div class="section-title">Hero Metrics: Wasted Clean Energy & Portfolio Impact</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Hero Metrics: Wasted Clean Energy & Portfolio Impact</div>', unsafe_allow_html=True)
 
 hero_left, hero_mid, hero_right = tf.columns([1.5, 1, 1])
 
@@ -255,7 +255,7 @@ total_co2_lost = df_grid["co2_loss_tons"].sum()
 
 # Hero metric card: Total estimated dispatch-down energy volume
 with hero_left:
-    tf.markdown(f"""
+    st.markdown(f"""
         <div class="hero-metric-container">
             <p style='margin:0; font-size:0.85rem; color:{MUTED_TEXT}; text-transform:uppercase; letter-spacing:0.05em;'>ESTIMATED DISPATCH-DOWN VOLUME (HERO METRIC)</p>
             <p style='margin:0.2rem 0; font-size:2.8rem; font-weight:800; color:{ACCENT_RED};'>{total_curtailed_mwh:,.1f} MWh</p>
@@ -265,31 +265,31 @@ with hero_left:
 
 # Environmental impact metrics
 with hero_mid:
-    with tf.container(border=True):
-        tf.metric("CO₂ Operational Offset Loss", f"{total_co2_lost:,.1f} Tons", "Clean Generation Missed (est.)", delta_color="inverse")
-        tf.metric("Current Carbon Intensity", f"{latest_snapshot['co2_intensity_g_kwh']} g/kWh", "EirGrid live series" if IS_LIVE else "Simulated")
+    with st.container(border=True):
+        st.metric("CO₂ Operational Offset Loss", f"{total_co2_lost:,.1f} Tons", "Clean Generation Missed (est.)", delta_color="inverse")
+        st.metric("Current Carbon Intensity", f"{latest_snapshot['co2_intensity_g_kwh']} g/kWh", "EirGrid live series" if IS_LIVE else "Simulated")
 
 # Financial revenue loss metrics
 with hero_right:
-    with tf.container(border=True):
-        tf.metric("Wasted Revenue Potential", f"€{total_wasted_rev:,.2f}", "Wholesale Value Dropped (est.)", delta_color="inverse")
-        tf.metric("SEM Day-Ahead Price", f"€{latest_snapshot['sem_price_eur']:.2f} / MWh", "Simulated - no confirmed live source")
+    with st.container(border=True):
+        st.metric("Wasted Revenue Potential", f"€{total_wasted_rev:,.2f}", "Wholesale Value Dropped (est.)", delta_color="inverse")
+        st.metric("SEM Day-Ahead Price", f"€{latest_snapshot['sem_price_eur']:.2f} / MWh", "Simulated - no confirmed live source")
 
 # 5. LIVE STABILITY CONSTRAINTS & WEATHER AERODYNAMICS
-tf.markdown('<div class="section-title">Live Stability Constraints & Weather Aerodynamics</div>', unsafe_allow_html=True)
-m_demand, m_snsp, m_idc, m_hub_wind, m_air_density = tf.columns(5)
+st.markdown('<div class="section-title">Live Stability Constraints & Weather Aerodynamics</div>', unsafe_allow_html=True)
+m_demand, m_snsp, m_idc, m_hub_wind, m_air_density = st.columns(5)
 
 # System Demand Metric
 with m_demand:
-    with tf.container(border=True):
-        tf.metric("System Load Demand", f"{latest_snapshot['demand_mw']:,} MW", "EirGrid live series" if IS_LIVE else "Simulated")
+    with st.container(border=True):
+        st.metric("System Load Demand", f"{latest_snapshot['demand_mw']:,} MW", "EirGrid live series" if IS_LIVE else "Simulated")
 
 # System Non-Synchronous Penetration (SNSP) Limit Tracking
 with m_snsp:
-    with tf.container(border=True):
+    with st.container(border=True):
         snsp_now = latest_snapshot['snsp_pct']
         snsp_breach = snsp_now > SNSP_CAP_PCT
-        tf.metric(
+        st.metric(
             "SNSP Penetration %",
             f"{snsp_now}%",
             f"Cap Limit: {SNSP_CAP_PCT}%" + (" — BREACH" if snsp_breach else ""),
@@ -298,28 +298,28 @@ with m_snsp:
 
 # Combined Moyle & EWIC Interconnector Flow Metric
 with m_idc:
-    with tf.container(border=True):
-        tf.metric("Net Interconnection", f"{latest_snapshot['net_interconnection_mw']} MW", "Combined Moyle+EWIC (EirGrid doesn't split these publicly)")
+    with st.container(border=True):
+        st.metric("Net Interconnection", f"{latest_snapshot['net_interconnection_mw']} MW", "Combined Moyle+EWIC (EirGrid doesn't split these publicly)")
 
 # Meteorological Wind Vector Estimates
 with m_hub_wind:
-    with tf.container(border=True):
-        tf.metric("Wind Speed (100m Hub)", f"{latest_snapshot['wind_speed_100m']} m/s", f"{latest_snapshot['wind_direction_deg']}° Heading (simulated)")
+    with st.container(border=True):
+        st.metric("Wind Speed (100m Hub)", f"{latest_snapshot['wind_speed_100m']} m/s", f"{latest_snapshot['wind_direction_deg']}° Heading (simulated)")
 
 # Aerodynamic Air Density Computation Metric
 with m_air_density:
-    with tf.container(border=True):
-        tf.metric("Calculated Air Density", f"{latest_snapshot['air_density_kgm3']} kg/m³", "Simulated")
+    with st.container(border=True):
+        st.metric("Calculated Air Density", f"{latest_snapshot['air_density_kgm3']} kg/m³", "Simulated")
 
 tf.markdown("---")
 
 # 6. TIME-SERIES PROFILES & POWER CURVE CHARTS
-tf.markdown('<div class="section-title"> System Balance Overlays & Performance Curves</div>', unsafe_allow_html=True)
-trend_col, curve_col = tf.columns([1.3, 1])
+st.markdown('<div class="section-title"> System Balance Overlays & Performance Curves</div>', unsafe_allow_html=True)
+trend_col, curve_col = st.columns([1.3, 1])
 
 # Left Column: 24-Hour Grid Supply, Demand, and Curtailment Time Series
 with trend_col:
-    with tf.container(border=True):
+    with st.container(border=True):
         fig_trend = go.Figure()
 
         # System Demand line trace
@@ -361,16 +361,16 @@ with trend_col:
             xaxis=dict(gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT)),
             yaxis=dict(title=dict(text="Power/Energy (MW/MWh)", font=dict(color=MUTED_TEXT, size=11)), gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT))
         )
-        tf.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
         
-        tf.caption(
+        st.caption(
             "Dashed blue line is a DERIVED reconstruction (Wind Actual + Estimated Curtailment), not an "
             "independently measured series - EirGrid's free feed doesn't publish pre-curtailment wind potential."
         )
 
 # Right Column: Hub Wind Speed vs. Actual Generation Power Curve Scatter
 with curve_col:
-    with tf.container(border=True):
+    with st.container(border=True):
         fig_curve = go.Figure()
         fig_curve.add_trace(go.Scatter(
             x=df_grid["wind_speed_100m"],
@@ -388,20 +388,20 @@ with curve_col:
             xaxis=dict(title=dict(text="100m Hub Height Wind Speed (m/s)", font=dict(color=MUTED_TEXT, size=11)), gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT)),
             yaxis=dict(title=dict(text="Actual Grid Power Generation (MW)", font=dict(color=MUTED_TEXT, size=11)), gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT))
         )
-        tf.plotly_chart(fig_curve, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_curve, use_container_width=True, config={'displayModeBar': False})
         
-        tf.caption(
-            "⚠️ Simulated: hub wind speed is derived from realized wind output, not an independent "
+        st.caption(
+            "Simulated: hub wind speed is derived from realized wind output, not an independent "
             "measurement. No live wind-speed sensor feed exists in this project."
         )
 
 # 7. INTERCONNECTION AND COMMERCIAL PRICING TRACKS
-tf.markdown('<div class="section-title"> Cross-Border Flows & Market Pricing Dynamics</div>', unsafe_allow_html=True)
-flow_col, price_col = tf.columns(2)
+st.markdown('<div class="section-title"> Cross-Border Flows & Market Pricing Dynamics</div>', unsafe_allow_html=True)
+flow_col, price_col = st.columns(2)
 
 # Interconnector Flow Chart (Moyle + EWIC)
 with flow_col:
-    with tf.container(border=True):
+    with st.container(border=True):
         fig_flow = go.Figure()
         fig_flow.add_trace(go.Scatter(
             x=df_grid["timestamp"], y=df_grid["net_interconnection_mw"], 
@@ -419,12 +419,12 @@ with flow_col:
             xaxis=dict(gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT)),
             yaxis=dict(title=dict(text="Flow (MW, Positive=Import)", font=dict(color=MUTED_TEXT, size=10)), gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT))
         )
-        tf.plotly_chart(fig_flow, use_container_width=True, config={'displayModeBar': False})
-        tf.caption("EirGrid's free feed publishes combined interconnection flow only - Moyle and EWIC aren't split out.")
+        st.plotly_chart(fig_flow, use_container_width=True, config={'displayModeBar': False})
+        st.caption("EirGrid's free feed publishes combined interconnection flow only - Moyle and EWIC aren't split out.")
 
 # SEM Wholesale Day-Ahead Market Price Trend Chart
 with price_col:
-    with tf.container(border=True):
+    with st.container(border=True):
         fig_price = go.Figure()
         fig_price.add_trace(go.Scatter(
             x=df_grid["timestamp"], y=df_grid["sem_price_eur"], 
@@ -442,11 +442,11 @@ with price_col:
             xaxis=dict(gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT)),
             yaxis=dict(title=dict(text="Wholesale Price (€/MWh)", font=dict(color=MUTED_TEXT, size=10)), gridcolor=BORDER, tickfont=dict(color=MUTED_TEXT))
         )
-        tf.plotly_chart(fig_price, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_price, use_container_width=True, config={'displayModeBar': False})
 
 # Footer Attribution & Data Source Disclaimer
 attribution = "Supported by EirGrid Group Data • " if IS_LIVE else ""
-tf.markdown(
+st.markdown(
     f"<div style='text-align: center; font-size: 0.75rem; color: {MUTED_TEXT}; margin-top: 2rem;'>"
     f"{attribution}Demand/wind/interconnection/SNSP/CO2 sourced via EirGrid Smart Grid Dashboard • "
     f"Curtailment and pricing figures are estimates, not directly published series • Context Baseline: 2026</div>",
