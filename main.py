@@ -57,5 +57,4 @@ if __name__ == "__main__":
     run_powerflow_demo()
     train_forecast_models()
     print("\n" + "=" * 60)
-    print("To run the wind forecast API: uvicorn forecasting.forecast_app:app --reload")
     print("=" * 60)
