@@ -50,8 +50,8 @@ class EnergyDataFetcher:
         df["actual_generation_mw"] = df["wind_speed"].apply(self._simulate_wind_turbine_curve)
 
         # Inject Gaussian noise (mean=0, std=1.5 MW) to simulate telemetry inaccuracies and grid curtailments
-        np.random.seed(42)  # Fixed seed for reproducible noise across runs
-        noise = np.random.normal(0, 1.5, size=len(df))
+        rng = np.random.default_rng(42)
+        noise = rng.normal(0, 1.5, size=len(df))
         
         # Apply noise and clip bounds between 0.0 MW and max capacity (50.0 MW)
         df["actual_generation_mw"] = (df["actual_generation_mw"] + noise).clip(0, 50.0)
