@@ -207,7 +207,7 @@ Output: a dispatch schedule chart (charge/discharge over the horizon), cost/savi
 - **Frontend:** Streamlit
 - **API:** FastAPI + Uvicorn
 - **ML:** XGBoost
-- **Optimization:** MILP solver (e.g. PuLP / Pyomo — confirm which) + Stochastic MPC
+- **Optimization:** MILP solver (e.g. PuLP / Pyomo) + Stochastic MPC
 - **Power systems:** custom Newton-Raphson solver
 - **Data:** EirGrid (real-time + historical)
 
