@@ -13,7 +13,7 @@ It combines four previously separate projects:
 
 ## Table of Contents
 
-- [Screenshots](#screenshots)
+- [Video](#video)
 - [Project Structure](#project-structure)
 - [How It Works](#how-it-works)
 - [Mathematical Formulation](#mathematical-formulation)
@@ -27,7 +27,7 @@ It combines four previously separate projects:
 
 ---
 
-## Screenshots
+## Video
 
 **Curtailment Dashboard** — live/simulated EirGrid tracking, SNSP monitoring, and estimated dispatch-down volume:
 
