@@ -29,11 +29,11 @@ It combines four previously separate projects:
 
 ## Video
 
-**Curtailment Dashboard** — live/simulated EirGrid tracking, SNSP monitoring, and estimated dispatch-down volume:
+**Curtailment Dashboard** live/simulated EirGrid tracking, SNSP monitoring, and estimated dispatch-down volume:
 
 ![Curtailment Dashboard demo](assets/Dashboard.gif)
 
-**Microgrid EMS Dashboard** — MILP/Stochastic MPC battery dispatch with Newton-Raphson voltage validation:
+**Microgrid EMS Dashboard** MILP/Stochastic MPC battery dispatch with Newton-Raphson voltage validation:
 
 ![Microgrid EMS demo](assets/EMS(app).mp4)
 
