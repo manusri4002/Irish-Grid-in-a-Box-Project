@@ -42,7 +42,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Import optimization routines and power flow solver entities
-from optimization import run_deterministic_optimization, run_stochastic_mpc
+from optimization import run_deterministic_optimization, run_stochastic_mpc, ASSUMED_POWER_FACTOR
 from powerflow.models import Bus, BusType, Line as PFLine
 from powerflow.network import PowerNetwork
 from powerflow.solvers import NewtonRaphsonSolver
