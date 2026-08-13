@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-# Import Streamlit using 'tf' alias as structured in the application
+# Import Streamlit using 'st' alias as structured in the application
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -18,7 +18,7 @@ from scraper import GridCurtailmentScraper
 
 # 1. PAGE CONFIGURATION & THEME SETUP
 # Configure page metadata, screen layout width, and initial sidebar state
-tf.set_page_config(
+st.set_page_config(
     page_title="Irish Grid Curtailment & Analytics Hub",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -210,7 +210,7 @@ st.markdown('<div class="header-subtitle">Continuous tracking of dispatch-down e
 # Determine badge styling based on active API connection state (Live vs. Simulated)
 badge_color = ACCENT_GREEN if IS_LIVE else ACCENT_ORANGE
 badge_text = "LIVE: EirGrid Smart Grid Dashboard" if IS_LIVE else "SIMULATED (live feed unavailable this session)"
-tf.markdown(
+st.markdown(
     f'<span class="live-badge" style="background-color:{badge_color}22; color:{badge_color}; border:1px solid {badge_color};">{badge_text}</span>',
     unsafe_allow_html=True
 )
@@ -225,14 +225,14 @@ if not IS_LIVE:
     )
 
 # 3i. ON-DEMAND LIVE POLL CONTROL
-with st.expander("🔄 Poll Live Grid Status (independent live snapshot)"):
+with st.expander("Poll Live Grid Status (independent live snapshot)"):
     st.caption(
         "Calls the EirGrid live endpoint directly, on demand. Independent of the 24-hour trend below, "
         "so timestamps/values won't necessarily match the rightmost point on that chart exactly."
     )
     if st.button("Poll Now"):
         live = scraper.scrape_live_grid_status()
-        lc1, lc2, lc3 = tf.columns(3)
+        lc1, lc2, lc3 = st.columns(3)
         with lc1:
             st.metric("System Demand", f"{live['system_demand_mw']} MW")
             st.metric("Wind Actual", f"{live['available_wind_mw']} MW")
@@ -246,7 +246,7 @@ with st.expander("🔄 Poll Live Grid Status (independent live snapshot)"):
 # 4. HERO SECTION — CURTAILMENT OVERVIEW & LOST METRICS
 st.markdown('<div class="section-title">Hero Metrics: Wasted Clean Energy & Portfolio Impact</div>', unsafe_allow_html=True)
 
-hero_left, hero_mid, hero_right = tf.columns([1.5, 1, 1])
+hero_left, hero_mid, hero_right = st.columns([1.5, 1, 1])
 
 # Calculate 24-hour aggregate curtailment impact
 total_curtailed_mwh = df_grid["curtailment_mwh_estimate"].sum()
@@ -311,7 +311,7 @@ with m_air_density:
     with st.container(border=True):
         st.metric("Calculated Air Density", f"{latest_snapshot['air_density_kgm3']} kg/m³", "Simulated")
 
-tf.markdown("---")
+st.markdown("---")
 
 # 6. TIME-SERIES PROFILES & POWER CURVE CHARTS
 st.markdown('<div class="section-title"> System Balance Overlays & Performance Curves</div>', unsafe_allow_html=True)
