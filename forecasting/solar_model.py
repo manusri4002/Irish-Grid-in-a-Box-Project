@@ -8,22 +8,13 @@ from sklearn.model_selection import train_test_split
 
 
 class SolarForecastingModel:
+    class SolarForecastingModel:
     """
-    Predicts hourly solar PV generation (kW) based on weather features 
-    available at inference time in the EMS dashboard.
-
-    Design Rationale:
-    -----------------
-    Although solar irradiance is used during synthetic data labeling, the live dashboard UI only 
-    exposes `cloud_cover` (%) and `ambient_temp` (°C) controls without a live 
-    radiometer feed. Keeping features aligned guarantees consistency between 
-    training and live production inference.
-
-    (Resolves legacy bug where the UI previously invoked the wind model—expecting 8 
-    wind features—with a 3-feature payload, triggering silent exceptions and 
-    falling back to static heuristics.)
+    Predicts hourly solar PV generation (kW) from features available at
+    inference time in the EMS dashboard: hour, month, cloud_cover,
+    ambient_temp. The live UI has no radiometer feed, so training and
+    inference are kept to this same feature set for consistency.
     """
-
     # Class constant enforcing exact feature schema and column ordering
     FEATURE_COLS = ["hour", "month", "cloud_cover", "temperature"]
 
