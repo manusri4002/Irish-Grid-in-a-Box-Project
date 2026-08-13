@@ -166,7 +166,7 @@ For **inference**, both models take `month` (1–12) as a feature : expose this 
 
 **Recommended UI:** a date picker (or month slider) plus a "Forecast" button, with the output plotted as a time series and compared against a naive/heuristic baseline so users can sanity-check predictions.
 
-### 🌪️ Curtailment Dashboard
+### Curtailment Dashboard
 
 Recommended inputs:
 - Date range or forecast horizon
