@@ -2,7 +2,7 @@
 
 A **Streamlit platform for Irish smart grid analytics and microgrid energy management**, built to investigate real issues in the Irish power system end-to-end raw EirGrid data, ML forecasting, load-flow solving, and battery dispatch optimization.
 
-It combines four previously separate projects:
+It combines four separate projects I did:
 
 - **Real-time EirGrid data tracking** -: wind, demand, interconnection, and SNSP data pulled from EirGrid's Smart Grid Dashboard.
 - **Wind curtailment estimation** -: quantifying how much wind generation is likely being curtailed, and why.
