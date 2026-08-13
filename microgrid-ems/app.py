@@ -1,7 +1,7 @@
 import os
 import sys
 import io
-import streamlit as tf
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -105,7 +105,7 @@ ambient_temp = st.sidebar.slider("Forecasted Ambient Temp (°C)", -5, 40, 0)
 profile_type = "Clear Sky" if cloud_cover < 50 else "Overcast"
 
 if optimization_mode == "Stochastic MPC (Rolling Horizon)":
-    tf.sidebar.caption("Weather Features are not currently applied in Stochastic MPC mode.")
+    st.sidebar.caption("Weather Features are not currently applied in Stochastic MPC mode.")
 
 # 3. Energy Storage System (BESS) Constraints
 st.sidebar.header("Asset Parameters")
@@ -116,8 +116,8 @@ initial_soc = st.sidebar.slider("Initial SoC (kWh)", 0, batt_capacity, 30)
 
 # 4. Time-of-Use (TOU) Market Electricity Tariffs
 st.sidebar.header("Market Signals")
-peak_tariff = tf.sidebar.number_input("Peak Tariff (€/kWh)", value=0.35, step=0.01)
-off_peak_tariff = tf.sidebar.number_input("Off-Peak Tariff (€/kWh)", value=0.12, step=0.01)
+peak_tariff = st.sidebar.number_input("Peak Tariff (€/kWh)", value=0.35, step=0.01)
+off_peak_tariff = st.sidebar.number_input("Off-Peak Tariff (€/kWh)", value=0.12, step=0.01)
 
 # 5. Distribution Feeder Equivalent Impedance Parameters
 st.sidebar.header("Grid Constraints")
@@ -299,7 +299,7 @@ st.markdown(f"<p style='color:#BDC3C7; margin-bottom:2rem;'>Predictive Platform 
 
 # Grid Impedance Context Banner
 st.markdown('<div class="section-title">Grid Impedance Specs</div>', unsafe_allow_html=True)
-param_col1, param_col2 = tf.columns(2)
+param_col1, param_col2 = st.columns(2)
 with param_col1:
     st.info(f"Active System Line Resistance: {r_line} p.u.")
 with param_col2:
@@ -468,7 +468,7 @@ with right_layout_col:
             yaxis2=dict(title=dict(text="Market Price Signal (€/kWh)", font=dict(color="#F39C12", size=10)), tickfont=dict(color="#F39C12"), gridcolor="rgba(0,0,0,0)"),
             legend=dict(orientation="h", y=1.25, x=0, font=dict(color=TEXT_COLOR, size=10))
         )
-        tf.plotly_chart(fig_soc_vs_tariff, use_container_width=True, config={'displayModeBar': False})
+        st.plotly_chart(fig_soc_vs_tariff, use_container_width=True, config={'displayModeBar': False})
 
     # Bottom Sub-Chart: PCC Bus Voltage Trajectory & Statutory Limits
     with st.container(border=True):
