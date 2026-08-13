@@ -14,9 +14,15 @@ class EnergyDataFetcher:
         # Free Open-Meteo Historical Weather API endpoint
         self.weather_url = "https://archive-api.open-meteo.com/v1/archive"
 
-    def fetch_historical_data(self, start_date: str = "2025-01-01", end_date: str = "2025-06-01") -> pd.DataFrame:
-        """Fetches hourly historical wind speeds and profiles from Open-Meteo."""
-        print(f"Fetching wind telemetry from Open-Meteo for Lat: {self.lat}, Lon: {self.lon}...")
+   def fetch_historical_data(self, start_date: str = "2025-01-01", end_date: str = "2025-06-01") -> pd.DataFrame:
+    ...
+    df["actual_generation_mw"] = df["wind_speed"].apply(self._simulate_wind_turbine_curve)
+
+    rng = np.random.default_rng(42)
+    noise = rng.normal(0, 1.5, size=len(df))
+    df["actual_generation_mw"] = (df["actual_generation_mw"] + noise).clip(0, 50.0)
+
+    return df
 
         # Build API query parameters for 100m wind vectors and 2m ambient temperature
         params = {
@@ -58,12 +64,18 @@ class EnergyDataFetcher:
 
         return df
 
-    def fetch_historical_solar_data(
-        self,
-        start_date: str = "2025-01-01",
-        end_date: str = "2025-06-01",
-        panel_capacity_kw: float = 120.0
-    ) -> pd.DataFrame:
+   def fetch_historical_solar_data(self, start_date="2025-01-01", end_date="2025-06-01", panel_capacity_kw=120.0) -> pd.DataFrame:
+    ...
+    df["actual_generation_kw"] = df.apply(
+        lambda row: self._simulate_pv_output(row["shortwave_radiation"], row["temperature"], panel_capacity_kw),
+        axis=1
+    )
+
+    rng = np.random.default_rng(42)
+    noise = rng.normal(0, 1.5, size=len(df))
+    df["actual_generation_kw"] = (df["actual_generation_kw"] + noise).clip(0, panel_capacity_kw)
+
+    return df
         """
         Fetches hourly cloud cover, shortwave irradiance, and temperature
         from Open-Meteo, and derives a PV generation label from irradiance.
