@@ -63,8 +63,8 @@ Irish-Grid-in-a-Box-Project/
 ├── microgrid-ems/              # Battery dispatch (MILP / Stochastic MPC) dashboard
 │   ├── app.py                  # Streamlit UI
 │   ├── optimization.py         # MILP + Stochastic MPC solvers (PuLP)
-│   └── profiles.py              # Base load/solar/tariff profiles, scenario definitions
-├── assets/                      # README GIFs 
+│   └── profiles.py             # Base load/solar/tariff profiles, scenario definitions
+├── assets/                     # README GIFs 
 ├── .gitignore
 └── README.md
 ```
@@ -223,7 +223,7 @@ streamlit run microgrid-ems/app.py --server.port 8502      # Microgrid EMS Dashb
 
 ---
 
-## Inputs — What Each Module Expects
+## Inputs What Each Module Expects
 
 ### Power-Flow Engine (`powerflow/`)
 
@@ -268,8 +268,8 @@ Both models are trained on:
 ### Curtailment Dashboard
 
 Recommended inputs:
-- Lookback window (hours) — currently fixed at 24h in `dashboard.py`, worth exposing as a slider.
-- Installed wind capacity (MW) — currently hardcoded at 4,400 MW for the wind-speed-from-output estimate; exposing this would make the dashboard reusable for other regions.
+- Lookback window (hours) -: currently fixed at 24h in `dashboard.py`, worth exposing as a slider.
+- Installed wind capacity (MW) -: currently hardcoded at 4,400 MW for the wind-speed-from-output estimate; exposing this would make the dashboard reusable for other regions.
 
 Output: EirGrid demand/wind/SNSP/interconnection (live or simulated), estimated curtailed MWh, and estimated wasted SEM market revenue.
 
