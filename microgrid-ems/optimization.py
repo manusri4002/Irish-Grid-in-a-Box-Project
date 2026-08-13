@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 from profiles import get_base_profiles, get_stochastic_scenarios
 
+ASSUMED_POWER_FACTOR = 0.95  # lagging; typical for mixed residential/commercial load
+_Q_FACTOR = np.tan(np.arccos(ASSUMED_POWER_FACTOR))  # Q = P * tan(acos(pf))
+
+
 def run_deterministic_optimization(
     batt_capacity, batt_max_power, eff, init_soc, 
     peak_cost, off_peak_cost, profile_type, 
@@ -186,7 +190,8 @@ def run_stochastic_mpc((
                 # LinDistFlow voltage safety bounds enforced independently across every scenario branch
                 if enforce_voltage:
                     p_net_kw = p_grid[t][s] - base_load[t]
-                    v_approx = 1.0 + (r_line * p_net_kw / 1000.0)
+                    q_net_kvar = p_net_kw * _Q_FACTOR
+                    v_approx = 1.0 + ((r_line * p_net_kw + x_line * q_net_kvar) / 1000.0)
                     prob += v_approx >= 0.95
                     prob += v_approx <= 1.05
 
