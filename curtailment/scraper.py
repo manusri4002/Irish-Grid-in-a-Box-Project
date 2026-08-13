@@ -2,6 +2,14 @@ import numpy as np
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
+
+# EirGrid publishes no official API spec (there's an open request for one
+# on data.gov.ie). The query pattern below matches an actively maintained
+# open-source downloader: github.com/Daniel-Parke/EirGrid_Data_Download.
+# The exact field names in a successful "Rows" payload have not been
+# confirmed against a live response in this repo - run
+# GridCurtailmentScraper().verify_connection() before depending on this,
+# and update the key lookup below if it reports a schema mismatch.
 EIRGRID_BASE_URL = "https://www.smartgriddashboard.com/DashboardService.svc/data"
 
 
