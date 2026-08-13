@@ -1,6 +1,6 @@
 #Irish Grid in a Box
 
-A **Streamlit platform for Irish smart grid analytics and microgrid energy management**, designed for investigating actual issues in the Irish power system from end to end—from the raw data from EirGrid, through ML prediction, load-flow solving, to battery scheduling optimization.
+A **Streamlit platform for Irish smart grid analytics and microgrid energy management**, designed for investigating actual issues in the Irish power system from end to end from the raw data from EirGrid, through ML prediction, load-flow solving, to battery scheduling optimization.
 
 It combines four things separate projects:
 
