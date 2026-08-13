@@ -1,6 +1,9 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+import os
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
+
 from forecasting.model import WindForecastingModel
 
 _model_wrapper = WindForecastingModel()
@@ -8,7 +11,7 @@ _model_wrapper = WindForecastingModel()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load once at startup instead of per-request; state lives on app.state
+    # Check once at startup instead of on every request; result lives on app.state
     app.state.model_ready = os.path.exists(_model_wrapper.model_path)
     yield
 
@@ -22,18 +25,19 @@ app = FastAPI(
 
 
 class WeatherTelemetry(BaseModel):
-    wind_speed: float
-    temperature: float
-    hour: int
-    month: int
-    wind_dir_sin: float
-    wind_dir_cos: float
-    wind_speed_lag1: float
-    wind_speed_lag2: float
+    wind_speed: float        # Current wind speed in meters per second (m/s)
+    temperature: float       # Ambient temperature in degrees Celsius (°C)
+    hour: int                # Hour of the day (0 to 23)
+    month: int                # Month of the year (1 to 12)
+    wind_dir_sin: float       # Sine component of wind direction angle
+    wind_dir_cos: float       # Cosine component of wind direction angle
+    wind_speed_lag1: float    # Wind speed 1 hour prior (m/s)
+    wind_speed_lag2: float    # Wind speed 2 hours prior (m/s)
 
 
 @app.get("/")
 def read_root(request: Request):
+    """Health check: reports whether the trained model artifact is present."""
     return {
         "status": "Online",
         "service": "Wind Forecasting Engine",
@@ -43,6 +47,7 @@ def read_root(request: Request):
 
 @app.post("/predict", response_model=dict)
 def predict_generation(telemetry: WeatherTelemetry, request: Request):
+    """Predicts next-hour wind generation (MW) for a 50 MW asset from live weather telemetry."""
     if not request.app.state.model_ready:
         raise HTTPException(status_code=503, detail="Forecasting model binary not found. Run training suite first.")
 
