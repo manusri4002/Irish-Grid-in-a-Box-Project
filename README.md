@@ -35,7 +35,7 @@ It combines four previously separate projects:
 
 **Microgrid EMS Dashboard** MILP/Stochastic MPC battery dispatch with Newton-Raphson voltage validation:
 
-![Microgrid EMS demo](assets/EMS(app).mp4)
+![Microgrid EMS demo](assets/EMS.gif)
 
 
 
