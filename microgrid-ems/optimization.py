@@ -94,40 +94,28 @@ def run_deterministic_optimization(
     return None
 
 
-def run_stochastic_mpc(
-    batt_capacity, batt_max_power, eff, init_soc, 
-    peak_cost, off_peak_cost, cloud_cover=20, ambient_temp=25, 
+def run_stochastic_mpc((
+    batt_capacity, batt_max_power, eff, init_soc,
+    peak_cost, off_peak_cost, cloud_cover=20, ambient_temp=25,
     r_line=0.15, x_line=0.15, enforce_voltage=True
 ):
     """
-    Executes a Stochastic Model Predictive Control (MPC) rolling-horizon optimization.
-    
-    At each step:
-    1. Formulates a scenario-tree stochastic MILP across the receding lookahead horizon.
-    2. Minimizes expected operational cost weighted by scenario probabilities.
-    3. Enforces NON-ANTICIPATIVITY: the current hour's battery action is pinned
-       identical across every scenario branch, since the controller cannot know
-       which future weather scenario will actually occur when deciding right now.
-       (Verified concretely: without this constraint, the solver could commit to
-       a DIFFERENT current-hour battery action depending on which future
-       scenario it assumed - i.e. it was allowed to peek at the future before
-       deciding the present. Only strictly-future hours are allowed to branch
-       by scenario, since those represent genuine recourse decisions made
-       after more information is known.)
-    4. Draws the ACTUAL realized weather scenario for this hour from the real
-       scenario probabilities (not a fixed hardcoded outcome), so grid import
-       reacts to whatever solar genuinely shows up against the committed,
-       non-anticipative battery action.
-    5. Recedes horizon and updates real physical State of Charge (SoC).
+    Stochastic MPC rolling-horizon dispatch.
 
-    Runs the FULL 24-hour horizon (previously silently truncated to 12 hours).
+    Each hour, solves a scenario-tree MILP over the receding horizon,
+    weighted by scenario probability. The current hour's battery action
+    is pinned identical across scenarios (non-anticipativity): the
+    controller can't know which weather scenario will occur, so it can't
+    let the current decision depend on it. Only future hours branch by
+    scenario, since those are genuine recourse decisions.
 
-    Includes a per-scenario curtailment variable so a scenario's solar
-    surplus - which can differ across scenario branches even though the
-    battery action is now shared - always has somewhere to go instead of
-    making the LP infeasible when it exceeds what the shared battery action
-    can absorb (verified this failure mode with an exaggerated scenario set
-    before adding the fix, and confirmed it resolves cleanly afterward).
+    A per-scenario curtailment variable lets a scenario's solar surplus
+    go unused instead of making the LP infeasible when it exceeds what
+    the shared battery action can absorb.
+
+    Runs the full 24-hour horizon. Draws the realized weather scenario
+    each hour from the actual scenario probabilities, then recedes the
+    horizon and updates real SoC.
     """
     # Fetch stochastic scenario tree definitions (probabilities and PV production scaling multipliers)
     scenarios = get_stochastic_scenarios()
