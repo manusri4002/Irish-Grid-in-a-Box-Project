@@ -78,20 +78,13 @@ def get_base_profiles(peak_cost, off_peak_cost, cloud_cover=20, ambient_temp=25)
     return hours, load, solar, prices
 
 
+_SCENARIOS = {
+    "ClearSky": {"prob": 0.25, "modifier": 1.10},
+    "Overcast": {"prob": 0.50, "modifier": 0.85},
+    "Storm":    {"prob": 0.25, "modifier": 0.40},
+}
+assert abs(sum(s["prob"] for s in _SCENARIOS.values()) - 1.0) < 1e-9
+
 def get_stochastic_scenarios():
-    """
-    Provides discrete solar irradiance scenario branches and probability distribution
-    for Scenario-Based Stochastic Programming / Stochastic MPC formulations.
-    
-    Ensures probability sum equals 1.0 (0.25 + 0.50 + 0.25 = 1.00).
-    """
-    return {
-        # High irradiance scenario branch (25% probability, 110% of base PV generation)
-        "ClearSky": {"prob": 0.25, "modifier": 1.10},
-        
-        # Expected / nominal scenario branch (50% probability, 85% of base PV generation)
-        "Overcast": {"prob": 0.50, "modifier": 0.85},
-        
-        # Low irradiance / heavy cloud cover branch (25% probability, 40% of base PV generation)
-        "Storm": {"prob": 0.25, "modifier": 0.40}
-    }
+    """Discrete solar irradiance scenarios and probabilities for the stochastic MPC formulation."""
+    return _SCENARIOS
