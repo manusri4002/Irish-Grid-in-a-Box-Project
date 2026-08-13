@@ -225,7 +225,7 @@ if not IS_LIVE:
     )
 
 # 3i. ON-DEMAND LIVE POLL CONTROL
-with st.expander("Poll Live Grid Status (independent live snapshot)"):
+with st.expander("🔄 Poll Live Grid Status (independent live snapshot)"):
     st.caption(
         "Calls the EirGrid live endpoint directly, on demand. Independent of the 24-hour trend below, "
         "so timestamps/values won't necessarily match the rightmost point on that chart exactly."
@@ -314,7 +314,7 @@ with m_air_density:
 st.markdown("---")
 
 # 6. TIME-SERIES PROFILES & POWER CURVE CHARTS
-st.markdown('<div class="section-title"> System Balance Overlays & Performance Curves</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">System Balance Overlays & Performance Curves</div>', unsafe_allow_html=True)
 trend_col, curve_col = st.columns([1.3, 1])
 
 # Left Column: 24-Hour Grid Supply, Demand, and Curtailment Time Series
@@ -396,7 +396,7 @@ with curve_col:
         )
 
 # 7. INTERCONNECTION AND COMMERCIAL PRICING TRACKS
-st.markdown('<div class="section-title"> Cross-Border Flows & Market Pricing Dynamics</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">Cross-Border Flows & Market Pricing Dynamics</div>', unsafe_allow_html=True)
 flow_col, price_col = st.columns(2)
 
 # Interconnector Flow Chart (Moyle + EWIC)
