@@ -304,6 +304,10 @@ with param_col1:
     st.info(f"Active System Line Resistance: {r_line} p.u.")
 with param_col2:
     st.info(f"Active System Line Reactance: {x_line} p.u.")
+    st.caption(
+        "Reactive power is estimated from active power at an assumed "
+        f"{ASSUMED_POWER_FACTOR} power factor (no live Q telemetry in this model)."
+    )
 
 # Top-level Hero Operational Metrics Block
 st.markdown('<div class="section-title">Hero Metrics: Operational Performance & Security Gate</div>', unsafe_allow_html=True)
