@@ -168,7 +168,7 @@ with the same power balance, exclusivity, and SoC constraints applied per scenar
 
 $$P_{ch,\,t_0,\,s} = P_{ch,\,t_0,\,s_{ref}} \quad \forall\, s \in S$$
 
-Only the current hour $t_0$ is pinned — future hours in the lookahead remain free to branch by scenario, since those represent genuine recourse decisions made after more information is known.
+Only the current hour $t_0$ is pinned. Future hours in the lookahead remain free to branch by scenario, since those represent genuine recourse decisions made after more information is known.
 
 ---
 
